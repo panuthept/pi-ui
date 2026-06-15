@@ -1,0 +1,74 @@
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+
+// Note: UiConfig does NOT extend UiDiffConfig from diff-render/index.ts
+// because that would create a circular dependency (diff-render imports config via registerDiffTools).
+// Instead, we define the diff fields inline. The types are structurally compatible —
+// registerDiffTools only reads diffTheme, diffSplitMinWidth, diffSplitMinCodeWidth.
+export const ANIMATION_STYLES = [
+  "diagonal",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+  "center-out",
+  "wave",
+  "horizontal",
+  "vertical",
+  "vertical-up",
+] as const;
+export type AnimationStyle = (typeof ANIMATION_STYLES)[number];
+
+export interface UiConfig {
+  // Thinking settings
+  mutedTheme: boolean;
+  codeUnindent: boolean;
+  labelText: string;
+  labelColor: string;
+  // Splashscreen
+  animationStyle: AnimationStyle;
+  // Diff settings (structurally compatible with UiDiffConfig)
+  diffTheme: string;
+  diffSplitMinWidth: number;
+  diffSplitMinCodeWidth: number;
+}
+
+const SETTINGS_PATH = join(getAgentDir(), "settings.json");
+
+export const DEFAULT_CONFIG: UiConfig = {
+  mutedTheme: false,
+  codeUnindent: true,
+  labelText: "Thinking...",
+  labelColor: "255,215,0",
+  animationStyle: "vertical-up",
+  diffTheme: "github-dark",
+  diffSplitMinWidth: 150,
+  diffSplitMinCodeWidth: 60,
+};
+
+export function loadConfig(): UiConfig {
+  if (existsSync(SETTINGS_PATH)) {
+    try {
+      const full = JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"));
+      // Prefer 'ui' key, fall back to 'hephaestus' for backward compatibility
+      return { ...DEFAULT_CONFIG, ...(full.ui ?? full.hephaestus ?? {}) };
+    } catch {
+      /* ignore corrupt file */
+    }
+  }
+  return DEFAULT_CONFIG;
+}
+
+export function saveConfig(config: UiConfig): void {
+  let full: Record<string, unknown> = {};
+  if (existsSync(SETTINGS_PATH)) {
+    try {
+      full = JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"));
+    } catch {
+      /* ignore corrupt file */
+    }
+  }
+  full.ui = config;
+  delete full.hephaestus; // drop legacy key
+  writeFileSync(SETTINGS_PATH, JSON.stringify(full, null, 2), "utf-8");
+}
